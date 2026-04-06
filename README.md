@@ -1,8 +1,8 @@
 ---
 title: Shipping Env
-emoji: ship
+emoji: 🚢
 colorFrom: blue
-colorTo: cyan
+colorTo: indigo
 sdk: docker
 pinned: false
 app_port: 8000
