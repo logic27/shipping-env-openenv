@@ -1,0 +1,40 @@
+[
+  {
+    "task_id": "easy_rotterdam_watch",
+    "difficulty": "easy",
+    "title": "Protect a cold-chain arrival into Rotterdam",
+    "expected_commands": [
+      "inspect_vessel",
+      "inspect_congestion_history",
+      "inspect_forecast",
+      "inspect_route_options",
+      "submit_plan"
+    ]
+  },
+  {
+    "task_id": "medium_asia_reroute",
+    "difficulty": "medium",
+    "title": "Reroute around a Shanghai congestion spike",
+    "expected_commands": [
+      "inspect_vessel",
+      "inspect_port",
+      "inspect_congestion_history",
+      "inspect_forecast",
+      "inspect_route_options",
+      "submit_plan"
+    ]
+  },
+  {
+    "task_id": "hard_north_sea_allocation",
+    "difficulty": "hard",
+    "title": "Replan a tanker arrival during a storm-driven North Sea disruption",
+    "expected_commands": [
+      "inspect_vessel",
+      "inspect_port",
+      "inspect_congestion_history",
+      "inspect_forecast",
+      "inspect_route_options",
+      "submit_plan"
+    ]
+  }
+]
