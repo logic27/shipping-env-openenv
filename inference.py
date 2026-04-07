@@ -27,12 +27,55 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
 HF_ROUTER_BASE_URL = "https://router.huggingface.co/v1"
+BENCHMARK = "shipping_env"
 
 
 def emit_log(stage: str, payload: Dict[str, Any]) -> None:
     """Print validator-friendly structured logs."""
 
-    print(f"[{stage}] {json.dumps(payload, sort_keys=True)}", flush=True)
+    print(f"[{stage}] {json.dumps(payload)}", flush=True)
+
+
+def log_start(task: str, env: str, model: str) -> None:
+    emit_log(
+        "START",
+        {
+            "task": task,
+            "env": env,
+            "model": model,
+        },
+    )
+
+
+def log_step(
+    step: int,
+    action: str,
+    reward: float,
+    done: bool,
+    error: Optional[str],
+) -> None:
+    emit_log(
+        "STEP",
+        {
+            "step": step,
+            "action": action,
+            "reward": reward,
+            "done": done,
+            "error": error,
+        },
+    )
+
+
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    emit_log(
+        "END",
+        {
+            "success": success,
+            "steps": steps,
+            "score": score,
+            "rewards": rewards,
+        },
+    )
 
 
 def _local_step(env: ShippingEnvironment, action: ShippingAction) -> Dict[str, Any]:
@@ -336,45 +379,35 @@ def solve_task(task_id: str) -> Dict[str, Any]:
 
 def run_all_tasks() -> List[Dict[str, Any]]:
     results: List[Dict[str, Any]] = []
-    emit_log(
-        "START",
-        {
-            "api_base_url": API_BASE_URL,
-            "model_name": MODEL_NAME,
-            "has_hf_token": bool(HF_TOKEN),
-            "has_local_image_name": bool(LOCAL_IMAGE_NAME),
-            "task_count": len(get_task_catalog()),
-        },
-    )
-
     for task in get_task_catalog():
-        emit_log(
-            "STEP",
-            {
-                "task_id": task["task_id"],
-                "status": "running",
-            },
+        task_id = task["task_id"]
+        log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
+
+        result = solve_task(task_id)
+        reward = float(result["reward"] or 0.0)
+        action = (
+            "submit_plan:"
+            f"{result['plan']['forecast_model']}/"
+            f"{result['plan']['target_port_id']}/"
+            f"{result['plan']['service_speed_knots']}"
         )
-        result = solve_task(task["task_id"])
-        emit_log(
-            "STEP",
-            {
-                "task_id": task["task_id"],
-                "status": "completed",
-                "execution_mode": result["execution_mode"],
-                "reward": result["reward"],
-            },
+        error = result.get("fallback_reason")
+        log_step(
+            step=1,
+            action=action,
+            reward=reward,
+            done=True,
+            error=error,
+        )
+        score = float(result["metrics"].get("score", reward))
+        score = min(max(score, 0.0), 1.0)
+        log_end(
+            success=score >= 0.8,
+            steps=1,
+            score=score,
+            rewards=[reward],
         )
         results.append(result)
-
-    emit_log(
-        "END",
-        {
-            "status": "ok",
-            "task_count": len(results),
-            "results": results,
-        },
-    )
     return results
 
 
@@ -382,13 +415,13 @@ if __name__ == "__main__":
     try:
         run_all_tasks()
     except Exception as exc:
-        fallback_results = [solve_task_local(task["task_id"]) for task in get_task_catalog()]
-        emit_log(
-            "END",
-            {
-                "status": "fallback_error",
-                "error_type": exc.__class__.__name__,
-                "error": str(exc),
-                "results": fallback_results,
-            },
+        log_end(
+            success=False,
+            steps=0,
+            score=0.0,
+            rewards=[],
+        )
+        print(
+            f"[DEBUG] inference.py failed with {exc.__class__.__name__}: {exc}",
+            flush=True,
         )
