@@ -32,7 +32,7 @@ HF_ROUTER_BASE_URL = "https://router.huggingface.co/v1"
 def emit_log(stage: str, payload: Dict[str, Any]) -> None:
     """Print validator-friendly structured logs."""
 
-    print(f"{stage} {json.dumps(payload, sort_keys=True)}", flush=True)
+    print(f"[{stage}] {json.dumps(payload, sort_keys=True)}", flush=True)
 
 
 def _local_step(env: ShippingEnvironment, action: ShippingAction) -> Dict[str, Any]:
