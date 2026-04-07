@@ -333,7 +333,8 @@ class ShippingEnvironment(Environment):
             else 0.0,
             "evidence": evidence_score,
         }
-        total_score = round(sum(score_breakdown.values()), 2)
+        raw_total_score = round(sum(score_breakdown.values()), 2)
+        total_score = max(0.01, min(0.99, raw_total_score))
 
         return self._observation(
             summary=(
@@ -367,6 +368,7 @@ class ShippingEnvironment(Environment):
             metadata={
                 "optimal_plan": optimal,
                 "score_breakdown": score_breakdown,
+                "raw_score": raw_total_score,
             },
         )
 
