@@ -26,6 +26,7 @@ class ShippingEnvironment(Environment):
     """Offline maritime disruption planning environment."""
 
     SUPPORTS_CONCURRENT_SESSIONS: bool = True
+    MIN_SCORE: float = 0.01
 
     def __init__(self):
         self._state = State(episode_id=str(uuid4()), step_count=0)
@@ -47,7 +48,7 @@ class ShippingEnvironment(Environment):
                 "a seeded maritime planning scenario."
             ),
             phase="task_selection",
-            reward=0.0,
+            reward=self.MIN_SCORE,
             done=False,
             metadata={
                 "environment": "shipping_env",
@@ -324,13 +325,13 @@ class ShippingEnvironment(Environment):
         score_breakdown = {
             "forecast_model": 0.25
             if action.forecast_model == optimal["forecast_model"]
-            else 0.0,
+            else self.MIN_SCORE,
             "target_port": 0.45
             if target_port == optimal["target_port_id"]
-            else 0.15 if target_port in self._active_task["candidate_ports"] else 0.0,
+            else 0.15 if target_port in self._active_task["candidate_ports"] else self.MIN_SCORE,
             "service_speed": 0.20
             if action.service_speed_knots == optimal["service_speed_knots"]
-            else 0.0,
+            else self.MIN_SCORE,
             "evidence": evidence_score,
         }
         raw_total_score = round(sum(score_breakdown.values()), 2)
@@ -398,7 +399,7 @@ class ShippingEnvironment(Environment):
             return 0.10
         if len(required.intersection(self._evidence_types)) >= 2:
             return 0.05
-        return 0.0
+        return self.MIN_SCORE
 
     def _route_option_for(self, port_id: str) -> Optional[Dict[str, Any]]:
         assert self._active_task is not None
@@ -409,7 +410,7 @@ class ShippingEnvironment(Environment):
 
     def _shape_reward(self, command_key: str) -> float:
         if command_key in self._seen_commands:
-            return 0.0
+            return self.MIN_SCORE
         self._seen_commands.add(command_key)
         return 0.05
 
@@ -418,7 +419,7 @@ class ShippingEnvironment(Environment):
         return self._observation(
             summary=message,
             phase=phase,
-            reward=-0.05,
+            reward=self.MIN_SCORE,
             done=False,
         )
 
