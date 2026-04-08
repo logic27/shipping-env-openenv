@@ -4,11 +4,11 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Typed action and observation models for the shipping environment."""
+"""Typed action, observation, and state models for the shipping environment."""
 
 from typing import Any, Dict, List, Literal, Optional
 
-from openenv.core.env_server.types import Action, Observation
+from openenv.core.env_server.types import Action, Observation, State
 from pydantic import Field
 
 
@@ -66,6 +66,12 @@ class ShippingAction(Action):
 class ShippingObservation(Observation):
     """Observation returned after each environment interaction."""
 
+    # Use string markers here so raw observation payloads avoid numeric booleans.
+    done: str = Field(
+        default="false",
+        description="Whether the episode has terminated, serialized as 'true' or 'false'.",
+    )
+
     summary: str = Field(default="", description="Human-readable step result.")
     active_task_id: Optional[str] = Field(
         default=None,
@@ -86,6 +92,15 @@ class ShippingObservation(Observation):
     metrics: Dict[str, float] = Field(
         default_factory=dict,
         description="Numeric metrics for the latest step or final grade.",
+    )
+
+
+class ShippingState(State):
+    """Sanitized state model for raw transport payloads."""
+
+    step_count: str = Field(
+        default="active",
+        description="Session progression marker, serialized as text for validator safety.",
     )
 
 

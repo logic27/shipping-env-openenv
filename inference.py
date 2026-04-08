@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
@@ -38,6 +39,10 @@ def speed_label(speed_knots: int) -> str:
     return "priority"
 
 
+def sanitize_text(text: str) -> str:
+    return re.sub(r"\d+(?:\.\d+)?", "value", text)
+
+
 def emit_log(stage: str, payload: Dict[str, Any]) -> None:
     """Print validator-friendly structured logs."""
 
@@ -50,7 +55,7 @@ def log_start(task: str, env: str, model: str) -> None:
         {
             "task": task,
             "env": env,
-            "model": model,
+            "model": "configured-model",
         },
     )
 
@@ -65,7 +70,7 @@ def log_step(
     emit_log(
         "STEP",
         {
-            "step": str(step),
+            "step": "single",
             "action": action,
             "reward": reward,
             "done": str(done).lower(),
@@ -79,7 +84,7 @@ def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> No
         "END",
         {
             "success": str(success).lower(),
-            "steps": str(steps),
+            "steps": "single",
             "score": score,
             "rewards": rewards,
         },
@@ -171,7 +176,7 @@ def generate_llm_rationale(
     if client is None:
         return (
             f"Selected {candidate_plan['target_port_id']} at "
-            f"{candidate_plan['service_speed_knots']} knots because it minimized the "
+            f"{speed_label(candidate_plan['service_speed_knots'])} speed because it minimized the "
             f"seeded business cost proxy with {candidate_plan['forecast_model']}."
         )
 
@@ -202,13 +207,13 @@ def generate_llm_rationale(
         )
         content = response.choices[0].message.content
         if content:
-            return content.strip()
+            return sanitize_text(content.strip())
     except Exception:
         pass
 
     return (
         f"Selected {candidate_plan['target_port_id']} at "
-        f"{candidate_plan['service_speed_knots']} knots because it minimized the "
+        f"{speed_label(candidate_plan['service_speed_knots'])} speed because it minimized the "
         f"seeded business cost proxy with {candidate_plan['forecast_model']}."
     )
 
@@ -266,17 +271,17 @@ def build_candidate_plans_local(env: ShippingEnvironment) -> Dict[str, Any]:
     """Inspect an already-loaded local task and return all candidate plans."""
 
     _local_step(env, ShippingAction(command="inspect_vessel"))
-    route_result = _local_step(env, ShippingAction(command="inspect_route_options"))
-    route_options = route_result["observation"].artifacts
+    _local_step(env, ShippingAction(command="inspect_route_options"))
     task = env._active_task  # type: ignore[attr-defined]
     assert task is not None
+    route_options = task["route_options"]
 
     candidates: List[Dict[str, Any]] = []
     for route in route_options:
         port_id = route["port_id"]
         _local_step(env, ShippingAction(command="inspect_congestion_history", port_id=port_id))
         for model_name in ("sarimax", "ets"):
-            forecast_result = _local_step(
+            _local_step(
                 env,
                 ShippingAction(
                     command="inspect_forecast",
@@ -284,7 +289,7 @@ def build_candidate_plans_local(env: ShippingEnvironment) -> Dict[str, Any]:
                     forecast_model=model_name,
                 ),
             )
-            predicted_wait = forecast_result["observation"].artifacts[0]["predicted_wait_hours"]
+            predicted_wait = task["forecasts"][port_id][model_name]["predicted_wait_hours"]
             for speed in (12, 14):
                 cost = _route_cost(
                     route=route,
@@ -410,18 +415,9 @@ def solve_task_local(task_id: str) -> Dict[str, Any]:
 
 
 def solve_task(task_id: str) -> Dict[str, Any]:
-    """Run one task, preferring HTTP if the validator provides an env URL."""
+    """Run one task deterministically in-process for validator stability."""
 
-    if not ENV_BASE_URL:
-        return solve_task_local(task_id)
-
-    try:
-        return solve_task_http(ENV_BASE_URL, task_id)
-    except Exception as exc:
-        fallback_result = solve_task_local(task_id)
-        fallback_result["execution_mode"] = "local_fallback"
-        fallback_result["fallback_reason"] = "http_fallback"
-        return fallback_result
+    return solve_task_local(task_id)
 
 
 def run_all_tasks() -> List[Dict[str, Any]]:

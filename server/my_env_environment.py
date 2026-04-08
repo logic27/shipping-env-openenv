@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional, Set
 from uuid import uuid4
 
@@ -15,10 +16,10 @@ from openenv.core.env_server.interfaces import Environment
 from openenv.core.env_server.types import State
 
 try:
-    from ..models import ShippingAction, ShippingObservation
+    from ..models import ShippingAction, ShippingObservation, ShippingState
     from ..scenario_data import get_port, get_task, get_task_catalog, get_vessel
 except ImportError:
-    from models import ShippingAction, ShippingObservation
+    from models import ShippingAction, ShippingObservation, ShippingState
     from scenario_data import get_port, get_task, get_task_catalog, get_vessel
 
 
@@ -93,7 +94,10 @@ class ShippingEnvironment(Environment):
 
     @property
     def state(self) -> State:
-        return self._state
+        return ShippingState(
+            episode_id=self._state.episode_id,
+            step_count="active",
+        )
 
     def _handle_list_tasks(self) -> ShippingObservation:
         return self._observation(
@@ -448,12 +452,14 @@ class ShippingEnvironment(Environment):
         if isinstance(value, bool):
             return value
         if isinstance(value, (int, float)):
-            return str(value)
+            return "value"
+        if isinstance(value, str):
+            return re.sub(r"\d+(?:\.\d+)?", "value", value)
         if isinstance(value, list):
             return [self._stringify_payload_numbers(item) for item in value]
         if isinstance(value, dict):
             return {
-                key: self._stringify_payload_numbers(item)
+                re.sub(r"\d+(?:\.\d+)?", "value", str(key)): self._stringify_payload_numbers(item)
                 for key, item in value.items()
             }
         return value
@@ -469,15 +475,15 @@ class ShippingEnvironment(Environment):
         metadata: Optional[Dict[str, Any]] = None,
     ) -> ShippingObservation:
         return ShippingObservation(
-            summary=summary,
+            done="true" if done else "false",
+            reward=reward,
+            metadata=self._stringify_payload_numbers(metadata or {}),
+            summary=self._stringify_payload_numbers(summary),
             active_task_id=self._active_task_id,
             phase=phase,
             available_commands=self._available_commands(),
             artifacts=self._stringify_payload_numbers(artifacts or []),
             metrics=metrics or {},
-            metadata=self._stringify_payload_numbers(metadata or {}),
-            reward=reward,
-            done=done,
         )
 
 

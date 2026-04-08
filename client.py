@@ -69,6 +69,14 @@ class ShippingEnv(
             StepResult with ShippingObservation
         """
         obs_data = payload.get("observation", {})
+        raw_done = payload.get("done", False)
+        if isinstance(raw_done, str):
+            done_str = raw_done.lower()
+            done_value = done_str == "true"
+        else:
+            done_value = bool(raw_done)
+            done_str = "true" if done_value else "false"
+
         observation = ShippingObservation(
             summary=obs_data.get("summary", ""),
             active_task_id=obs_data.get("active_task_id"),
@@ -76,7 +84,7 @@ class ShippingEnv(
             available_commands=obs_data.get("available_commands", []),
             artifacts=obs_data.get("artifacts", []),
             metrics=obs_data.get("metrics", {}),
-            done=payload.get("done", False),
+            done=done_str,
             reward=payload.get("reward"),
             metadata=obs_data.get("metadata", {}),
         )
@@ -84,7 +92,7 @@ class ShippingEnv(
         return StepResult(
             observation=observation,
             reward=payload.get("reward"),
-            done=payload.get("done", False),
+            done=done_value,
         )
 
     def _parse_state(self, payload: Dict[str, Any]) -> State:
@@ -97,9 +105,13 @@ class ShippingEnv(
         Returns:
             State object with episode_id and step_count
         """
+        step_count = payload.get("step_count", 0)
+        if not isinstance(step_count, int):
+            step_count = 0
+
         return State(
             episode_id=payload.get("episode_id"),
-            step_count=payload.get("step_count", 0),
+            step_count=step_count,
         )
 
 
