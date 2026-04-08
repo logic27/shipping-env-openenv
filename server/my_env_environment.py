@@ -28,6 +28,11 @@ class ShippingEnvironment(Environment):
     SUPPORTS_CONCURRENT_SESSIONS: bool = True
     MIN_SCORE: float = 0.01
 
+    def _speed_label(self, speed_knots: int) -> str:
+        if speed_knots <= 12:
+            return "economy"
+        return "priority"
+
     def __init__(self):
         self._state = State(episode_id=str(uuid4()), step_count=0)
         self._active_task_id: Optional[str] = None
@@ -93,7 +98,7 @@ class ShippingEnvironment(Environment):
     def _handle_list_tasks(self) -> ShippingObservation:
         return self._observation(
             summary=(
-                "Three deterministic maritime tasks are available. Load one task to inspect "
+                "Deterministic maritime tasks are available. Load one task to inspect "
                 "vessels, ports, congestion history, route options, and model forecasts."
             ),
             phase="task_selection",
@@ -176,10 +181,7 @@ class ShippingEnvironment(Environment):
         port = get_port(port_id)
         self._evidence_types.add("inspect_port")
         return self._observation(
-            summary=(
-                f"{port['name']} currently has congestion index {port['congestion_index']:.2f} "
-                f"with {port['available_berths']} berth slots available."
-            ),
+            summary=f"Port conditions for {port['name']} are available for review.",
             phase="analysis",
             reward=self._shape_reward(f"inspect_port:{port_id}"),
             done=False,
@@ -200,7 +202,7 @@ class ShippingEnvironment(Environment):
         self._evidence_types.add("inspect_congestion_history")
         return self._observation(
             summary=(
-                f"Loaded the last {len(history)} congestion snapshots for `{port_id}`. "
+                f"Loaded recent congestion snapshots for `{port_id}`. "
                 "Use them to judge whether SARIMAX or ETS is more credible."
             ),
             phase="analysis",
@@ -254,8 +256,7 @@ class ShippingEnvironment(Environment):
         self._evidence_types.add("inspect_forecast")
         return self._observation(
             summary=(
-                f"{action.forecast_model.upper()} predicts {forecast['predicted_wait_hours']} "
-                f"hours of waiting at `{action.port_id}`."
+                f"{action.forecast_model.upper()} forecast data is available for `{action.port_id}`."
             ),
             phase="analysis",
             reward=self._shape_reward(
@@ -339,9 +340,8 @@ class ShippingEnvironment(Environment):
 
         return self._observation(
             summary=(
-                f"Plan submitted for `{self._active_task_id}` with score {total_score:.2f}. "
-                f"Predicted business cost index: {business_cost_pred:.1f}. "
-                f"Realized business cost index: {business_cost_actual:.1f}."
+                f"Plan submitted for `{self._active_task_id}`. "
+                "Operational details are included in the structured payload."
             ),
             phase="submitted",
             reward=total_score,
@@ -351,7 +351,7 @@ class ShippingEnvironment(Environment):
                     "task_id": self._active_task_id,
                     "chosen_forecast_model": action.forecast_model,
                     "chosen_port_id": target_port,
-                    "chosen_speed": f"{action.service_speed_knots} knots",
+                    "chosen_speed": self._speed_label(action.service_speed_knots),
                     "predicted_wait": f"{predicted_wait} hours",
                     "actual_wait": f"{actual_wait} hours",
                     "predicted_business_cost": f"{round(business_cost_pred, 2)}",
@@ -370,7 +370,7 @@ class ShippingEnvironment(Environment):
                 "optimal_plan": {
                     "forecast_model": optimal["forecast_model"],
                     "target_port_id": optimal["target_port_id"],
-                    "service_speed": f"{optimal['service_speed_knots']} knots",
+                    "service_speed": self._speed_label(optimal["service_speed_knots"]),
                 },
                 "score_breakdown": score_breakdown,
                 "predicted_business_cost": f"{round(business_cost_pred, 2)}",
@@ -442,6 +442,22 @@ class ShippingEnvironment(Environment):
             "submit_plan",
         ]
 
+    def _stringify_payload_numbers(self, value: Any) -> Any:
+        """Keep scores numeric, but stringify incidental payload numbers."""
+
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return str(value)
+        if isinstance(value, list):
+            return [self._stringify_payload_numbers(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                key: self._stringify_payload_numbers(item)
+                for key, item in value.items()
+            }
+        return value
+
     def _observation(
         self,
         summary: str,
@@ -457,9 +473,9 @@ class ShippingEnvironment(Environment):
             active_task_id=self._active_task_id,
             phase=phase,
             available_commands=self._available_commands(),
-            artifacts=artifacts or [],
+            artifacts=self._stringify_payload_numbers(artifacts or []),
             metrics=metrics or {},
-            metadata=metadata or {},
+            metadata=self._stringify_payload_numbers(metadata or {}),
             reward=reward,
             done=done,
         )

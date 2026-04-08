@@ -32,6 +32,12 @@ ENV_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:8000")
 BENCHMARK = "shipping_env"
 
 
+def speed_label(speed_knots: int) -> str:
+    if speed_knots <= 12:
+        return "economy"
+    return "priority"
+
+
 def emit_log(stage: str, payload: Dict[str, Any]) -> None:
     """Print validator-friendly structured logs."""
 
@@ -59,10 +65,10 @@ def log_step(
     emit_log(
         "STEP",
         {
-            "step": step,
+            "step": str(step),
             "action": action,
             "reward": reward,
-            "done": done,
+            "done": str(done).lower(),
             "error": error,
         },
     )
@@ -72,8 +78,8 @@ def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> No
     emit_log(
         "END",
         {
-            "success": success,
-            "steps": steps,
+            "success": str(success).lower(),
+            "steps": str(steps),
             "score": score,
             "rewards": rewards,
         },
@@ -97,9 +103,13 @@ def _route_cost(
     lateness_multiplier: float,
     speed: int,
 ) -> float:
-    eta_hours = route["eta_hours"][str(speed)]
-    weather_penalty = route["weather_penalty_hours"]
-    fuel_index = route["fuel_index"][str(speed)]
+    eta_hours = float(route["eta_hours"][str(speed)])
+    weather_penalty = float(route["weather_penalty_hours"])
+    fuel_index = float(route["fuel_index"][str(speed)])
+    predicted_wait_hours = float(predicted_wait_hours)
+    deadline_hours = float(deadline_hours)
+    fuel_weight = float(fuel_weight)
+    lateness_multiplier = float(lateness_multiplier)
     total_hours = eta_hours + predicted_wait_hours + weather_penalty
     lateness = max(0, total_hours - deadline_hours)
     return total_hours + fuel_weight * fuel_index + lateness_multiplier * lateness
@@ -343,7 +353,7 @@ def solve_task_http(base_url: str, task_id: str) -> Dict[str, Any]:
             "plan": {
                 "forecast_model": best_plan["forecast_model"],
                 "target_port_id": best_plan["target_port_id"],
-                "service_speed": f"{best_plan['service_speed_knots']} knots",
+                "service_speed": speed_label(best_plan["service_speed_knots"]),
                 "rationale": rationale,
             },
             "reward": final.reward,
@@ -386,7 +396,7 @@ def solve_task_local(task_id: str) -> Dict[str, Any]:
         "plan": {
             "forecast_model": best_plan["forecast_model"],
             "target_port_id": best_plan["target_port_id"],
-            "service_speed": f"{best_plan['service_speed_knots']} knots",
+            "service_speed": speed_label(best_plan["service_speed_knots"]),
             "rationale": rationale,
         },
         "reward": final["reward"],
@@ -410,9 +420,7 @@ def solve_task(task_id: str) -> Dict[str, Any]:
     except Exception as exc:
         fallback_result = solve_task_local(task_id)
         fallback_result["execution_mode"] = "local_fallback"
-        fallback_result["fallback_reason"] = (
-            f"HTTP execution failed for {ENV_BASE_URL}: {exc.__class__.__name__}: {exc}"
-        )
+        fallback_result["fallback_reason"] = "http_fallback"
         return fallback_result
 
 
