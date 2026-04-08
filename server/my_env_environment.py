@@ -354,13 +354,13 @@ class ShippingEnvironment(Environment):
                     "chosen_speed_knots": action.service_speed_knots,
                     "predicted_wait_hours": predicted_wait,
                     "actual_wait_hours": actual_wait,
+                    "predicted_business_cost": round(business_cost_pred, 2),
+                    "actual_business_cost": round(business_cost_actual, 2),
                     "rationale": action.rationale or "",
                 }
             ],
             metrics={
                 "score": total_score,
-                "predicted_business_cost": round(business_cost_pred, 2),
-                "actual_business_cost": round(business_cost_actual, 2),
                 "forecast_model_score": score_breakdown["forecast_model"],
                 "target_port_score": score_breakdown["target_port"],
                 "service_speed_score": score_breakdown["service_speed"],
@@ -369,6 +369,8 @@ class ShippingEnvironment(Environment):
             metadata={
                 "optimal_plan": optimal,
                 "score_breakdown": score_breakdown,
+                "predicted_business_cost": round(business_cost_pred, 2),
+                "actual_business_cost": round(business_cost_actual, 2),
             },
         )
 
