@@ -433,7 +433,7 @@ def run_all_tasks() -> List[Dict[str, Any]]:
             error=error,
         )
         score = float(result["metrics"].get("score", reward))
-        score = min(max(score, 0.0), 1.0)
+        score = min(max(score, 0.01), 0.99)
         log_end(
             success=score >= 0.8,
             steps=1,
@@ -451,8 +451,8 @@ if __name__ == "__main__":
         log_end(
             success=False,
             steps=0,
-            score=0.0,
-            rewards=[],
+            score=0.01,
+            rewards=[0.01],
         )
         print(
             f"[DEBUG] inference.py failed with {exc.__class__.__name__}: {exc}",

@@ -368,7 +368,6 @@ class ShippingEnvironment(Environment):
             metadata={
                 "optimal_plan": optimal,
                 "score_breakdown": score_breakdown,
-                "raw_score": raw_total_score,
             },
         )
 
