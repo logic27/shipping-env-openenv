@@ -339,15 +339,19 @@ def solve_task_http(base_url: str, task_id: str) -> Dict[str, Any]:
         )
         return {
             "task_id": task_id,
+            "score": float(final.observation.metrics.get("score", final.reward or 0.01)),
             "plan": {
                 "forecast_model": best_plan["forecast_model"],
                 "target_port_id": best_plan["target_port_id"],
-                "service_speed_knots": best_plan["service_speed_knots"],
-                "cost": best_plan["cost"],
+                "service_speed": f"{best_plan['service_speed_knots']} knots",
                 "rationale": rationale,
             },
             "reward": final.reward,
-            "metrics": final.observation.metrics,
+            "metrics": {
+                key: value
+                for key, value in final.observation.metrics.items()
+                if "score" in key
+            },
             "execution_mode": "http",
             "base_url": base_url,
         }
@@ -378,15 +382,19 @@ def solve_task_local(task_id: str) -> Dict[str, Any]:
     )
     return {
         "task_id": task_id,
+        "score": float(final["observation"].metrics.get("score", final["reward"] or 0.01)),
         "plan": {
             "forecast_model": best_plan["forecast_model"],
             "target_port_id": best_plan["target_port_id"],
-            "service_speed_knots": best_plan["service_speed_knots"],
-            "cost": best_plan["cost"],
+            "service_speed": f"{best_plan['service_speed_knots']} knots",
             "rationale": rationale,
         },
         "reward": final["reward"],
-        "metrics": final["observation"].metrics,
+        "metrics": {
+            key: value
+            for key, value in final["observation"].metrics.items()
+            if "score" in key
+        },
         "execution_mode": "local",
     }
 
@@ -422,7 +430,7 @@ def run_all_tasks() -> List[Dict[str, Any]]:
             "submit_plan:"
             f"{result['plan']['forecast_model']}/"
             f"{result['plan']['target_port_id']}/"
-            f"{result['plan']['service_speed_knots']}"
+            f"{result['plan']['service_speed']}"
         )
         error = result.get("fallback_reason")
         log_step(

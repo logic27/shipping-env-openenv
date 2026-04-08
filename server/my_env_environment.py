@@ -351,11 +351,11 @@ class ShippingEnvironment(Environment):
                     "task_id": self._active_task_id,
                     "chosen_forecast_model": action.forecast_model,
                     "chosen_port_id": target_port,
-                    "chosen_speed_knots": action.service_speed_knots,
-                    "predicted_wait_hours": predicted_wait,
-                    "actual_wait_hours": actual_wait,
-                    "predicted_business_cost": round(business_cost_pred, 2),
-                    "actual_business_cost": round(business_cost_actual, 2),
+                    "chosen_speed": f"{action.service_speed_knots} knots",
+                    "predicted_wait": f"{predicted_wait} hours",
+                    "actual_wait": f"{actual_wait} hours",
+                    "predicted_business_cost": f"{round(business_cost_pred, 2)}",
+                    "actual_business_cost": f"{round(business_cost_actual, 2)}",
                     "rationale": action.rationale or "",
                 }
             ],
@@ -367,10 +367,14 @@ class ShippingEnvironment(Environment):
                 "evidence_score": score_breakdown["evidence"],
             },
             metadata={
-                "optimal_plan": optimal,
+                "optimal_plan": {
+                    "forecast_model": optimal["forecast_model"],
+                    "target_port_id": optimal["target_port_id"],
+                    "service_speed": f"{optimal['service_speed_knots']} knots",
+                },
                 "score_breakdown": score_breakdown,
-                "predicted_business_cost": round(business_cost_pred, 2),
-                "actual_business_cost": round(business_cost_actual, 2),
+                "predicted_business_cost": f"{round(business_cost_pred, 2)}",
+                "actual_business_cost": f"{round(business_cost_actual, 2)}",
             },
         )
 
