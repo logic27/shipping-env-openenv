@@ -18,16 +18,18 @@ from openenv.core.env_server.types import State
 try:
     from ..models import ShippingAction, ShippingObservation, ShippingState
     from ..scenario_data import get_port, get_task, get_task_catalog, get_vessel
+    from .graders import MIN_SCORE as TASK_MIN_SCORE, interaction_reward, task_grader
 except ImportError:
     from models import ShippingAction, ShippingObservation, ShippingState
     from scenario_data import get_port, get_task, get_task_catalog, get_vessel
+    from server.graders import MIN_SCORE as TASK_MIN_SCORE, interaction_reward, task_grader
 
 
 class ShippingEnvironment(Environment):
     """Offline maritime disruption planning environment."""
 
     SUPPORTS_CONCURRENT_SESSIONS: bool = True
-    MIN_SCORE: float = 0.01
+    MIN_SCORE: float = TASK_MIN_SCORE
 
     def _speed_label(self, speed_knots: int) -> str:
         if speed_knots <= 12:
@@ -54,7 +56,7 @@ class ShippingEnvironment(Environment):
                 "a seeded maritime planning scenario."
             ),
             phase="task_selection",
-            reward=self.MIN_SCORE,
+            reward=interaction_reward(),
             done=False,
             metadata={
                 "environment": "shipping_env",
@@ -141,7 +143,7 @@ class ShippingEnvironment(Environment):
         return self._observation(
             summary=task["briefing"],
             phase="analysis",
-            reward=0.10,
+            reward=interaction_reward(),
             done=False,
             artifacts=[briefing_artifact],
             metadata={
@@ -326,21 +328,13 @@ class ShippingEnvironment(Environment):
         )
 
         optimal = self._active_task["optimal_plan"]
-        evidence_score = self._evidence_score()
-        score_breakdown = {
-            "forecast_model": 0.25
-            if action.forecast_model == optimal["forecast_model"]
-            else self.MIN_SCORE,
-            "target_port": 0.45
-            if target_port == optimal["target_port_id"]
-            else 0.15 if target_port in self._active_task["candidate_ports"] else self.MIN_SCORE,
-            "service_speed": 0.20
-            if action.service_speed_knots == optimal["service_speed_knots"]
-            else self.MIN_SCORE,
-            "evidence": evidence_score,
-        }
-        raw_total_score = round(sum(score_breakdown.values()), 2)
-        total_score = max(0.01, min(0.99, raw_total_score))
+        score_breakdown = task_grader(
+            action=action,
+            optimal_plan=optimal,
+            candidate_ports=self._active_task["candidate_ports"],
+            evidence_types=self._evidence_types,
+        )
+        total_score = score_breakdown["task_score"]
 
         return self._observation(
             summary=(
@@ -365,10 +359,11 @@ class ShippingEnvironment(Environment):
             ],
             metrics={
                 "score": total_score,
-                "forecast_model_score": score_breakdown["forecast_model"],
-                "target_port_score": score_breakdown["target_port"],
-                "service_speed_score": score_breakdown["service_speed"],
-                "evidence_score": score_breakdown["evidence"],
+                "task_score": total_score,
+                "forecast_model_score": score_breakdown["forecast_model_score"],
+                "target_port_score": score_breakdown["target_port_score"],
+                "service_speed_score": score_breakdown["service_speed_score"],
+                "evidence_score": score_breakdown["evidence_score"],
             },
             metadata={
                 "optimal_plan": {
@@ -377,6 +372,7 @@ class ShippingEnvironment(Environment):
                     "service_speed": self._speed_label(optimal["service_speed_knots"]),
                 },
                 "score_breakdown": score_breakdown,
+                "task_score": str(total_score),
                 "predicted_business_cost": f"{round(business_cost_pred, 2)}",
                 "actual_business_cost": f"{round(business_cost_actual, 2)}",
             },
@@ -398,19 +394,6 @@ class ShippingEnvironment(Environment):
             + self._active_task["lateness_multiplier"] * lateness
         )
 
-    def _evidence_score(self) -> float:
-        required = {
-            "inspect_vessel",
-            "inspect_congestion_history",
-            "inspect_forecast",
-            "inspect_route_options",
-        }
-        if required.issubset(self._evidence_types):
-            return 0.10
-        if len(required.intersection(self._evidence_types)) >= 2:
-            return 0.05
-        return self.MIN_SCORE
-
     def _route_option_for(self, port_id: str) -> Optional[Dict[str, Any]]:
         assert self._active_task is not None
         for route in self._active_task["route_options"]:
@@ -420,16 +403,16 @@ class ShippingEnvironment(Environment):
 
     def _shape_reward(self, command_key: str) -> float:
         if command_key in self._seen_commands:
-            return self.MIN_SCORE
+            return interaction_reward()
         self._seen_commands.add(command_key)
-        return 0.05
+        return interaction_reward()
 
     def _invalid(self, message: str) -> ShippingObservation:
         phase = "analysis" if self._active_task_id else "task_selection"
         return self._observation(
             summary=message,
             phase=phase,
-            reward=self.MIN_SCORE,
+            reward=interaction_reward(),
             done=False,
         )
 
