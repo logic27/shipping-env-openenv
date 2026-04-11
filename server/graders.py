@@ -60,7 +60,7 @@ def service_speed_score(action: ShippingAction, optimal_plan: Dict[str, Any]) ->
     return 0.20 if action.service_speed_knots == optimal_plan["service_speed_knots"] else MIN_SCORE
 
 
-def task_grader(
+def task_score_breakdown(
     action: ShippingAction,
     optimal_plan: Dict[str, Any],
     candidate_ports: Iterable[str],
@@ -77,3 +77,19 @@ def task_grader(
     breakdown["task_score"] = _clamp_open_unit(sum(breakdown.values()))
     breakdown["score"] = breakdown["task_score"]
     return breakdown
+
+
+def task_grader(
+    action: ShippingAction,
+    optimal_plan: Dict[str, Any],
+    candidate_ports: Iterable[str],
+    evidence_types: Iterable[str],
+) -> float:
+    """Return the final task score as a single float, matching common grader shape."""
+
+    return task_score_breakdown(
+        action=action,
+        optimal_plan=optimal_plan,
+        candidate_ports=candidate_ports,
+        evidence_types=evidence_types,
+    )["task_score"]

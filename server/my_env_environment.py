@@ -18,11 +18,21 @@ from openenv.core.env_server.types import State
 try:
     from ..models import ShippingAction, ShippingObservation, ShippingState
     from ..scenario_data import get_port, get_task, get_task_catalog, get_vessel
-    from .graders import MIN_SCORE as TASK_MIN_SCORE, interaction_reward, task_grader
+    from .graders import (
+        MIN_SCORE as TASK_MIN_SCORE,
+        interaction_reward,
+        task_grader,
+        task_score_breakdown,
+    )
 except ImportError:
     from models import ShippingAction, ShippingObservation, ShippingState
     from scenario_data import get_port, get_task, get_task_catalog, get_vessel
-    from server.graders import MIN_SCORE as TASK_MIN_SCORE, interaction_reward, task_grader
+    from server.graders import (
+        MIN_SCORE as TASK_MIN_SCORE,
+        interaction_reward,
+        task_grader,
+        task_score_breakdown,
+    )
 
 
 class ShippingEnvironment(Environment):
@@ -328,13 +338,18 @@ class ShippingEnvironment(Environment):
         )
 
         optimal = self._active_task["optimal_plan"]
-        score_breakdown = task_grader(
+        score_breakdown = task_score_breakdown(
             action=action,
             optimal_plan=optimal,
             candidate_ports=self._active_task["candidate_ports"],
             evidence_types=self._evidence_types,
         )
-        total_score = score_breakdown["task_score"]
+        total_score = task_grader(
+            action=action,
+            optimal_plan=optimal,
+            candidate_ports=self._active_task["candidate_ports"],
+            evidence_types=self._evidence_types,
+        )
 
         return self._observation(
             summary=(
