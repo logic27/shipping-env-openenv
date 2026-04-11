@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import re
 from typing import Any, Dict, List, Optional
@@ -43,21 +42,8 @@ def sanitize_text(text: str) -> str:
     return re.sub(r"\d+(?:\.\d+)?", "value", text)
 
 
-def emit_log(stage: str, payload: Dict[str, Any]) -> None:
-    """Print validator-friendly structured logs."""
-
-    print(f"[{stage}] {json.dumps(payload)}", flush=True)
-
-
 def log_start(task: str, env: str, model: str) -> None:
-    emit_log(
-        "START",
-        {
-            "task": task,
-            "env": env,
-            "model": "configured-model",
-        },
-    )
+    print(f"[START] task={task} env={env} model={model}", flush=True)
 
 
 def log_step(
@@ -67,27 +53,19 @@ def log_step(
     done: bool,
     error: Optional[str],
 ) -> None:
-    emit_log(
-        "STEP",
-        {
-            "step": "single",
-            "action": action,
-            "reward": reward,
-            "done": str(done).lower(),
-            "error": error,
-        },
+    error_val = error if error else "null"
+    done_val = str(done).lower()
+    print(
+        f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}",
+        flush=True,
     )
 
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
-    emit_log(
-        "END",
-        {
-            "success": str(success).lower(),
-            "steps": "single",
-            "score": score,
-            "rewards": rewards,
-        },
+    rewards_str = ",".join(f"{reward:.2f}" for reward in rewards)
+    print(
+        f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}",
+        flush=True,
     )
 
 
@@ -453,6 +431,10 @@ def run_all_tasks() -> List[Dict[str, Any]]:
             rewards=[reward],
         )
         results.append(result)
+    overall = sum(float(result["metrics"].get("score", result["reward"] or 0.01)) for result in results)
+    overall = overall / len(results) if results else 0.01
+    overall = min(max(overall, 0.01), 0.99)
+    print(f"FINAL_AVG_SCORE={overall:.3f}", flush=True)
     return results
 
 
@@ -460,12 +442,9 @@ if __name__ == "__main__":
     try:
         run_all_tasks()
     except Exception as exc:
-        log_end(
-            success=False,
-            steps=0,
-            score=0.01,
-            rewards=[0.01],
-        )
+        error_str = str(exc).replace(" ", "_")
+        log_step(step=0, action="startup", reward=0.01, done=True, error=error_str)
+        print("FINAL_AVG_SCORE=0.010", flush=True)
         print(
             f"[DEBUG] inference.py failed with {exc.__class__.__name__}: {exc}",
             flush=True,
